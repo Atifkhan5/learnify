@@ -9,8 +9,7 @@ import java.net.URLEncoder
 
 object YouTubePlaylistRepository {
 
-    private const val YOUTUBE_API_KEY = "AIzaSyCMIRB07whcfbYQ5pfzMb0_o2KV2gkAqB8"
-
+    private val youtubeApiKey = BuildConfig.YOUTUBE_API_KEY
     private val playlistIdRegex = Regex("[?&]list=([a-zA-Z0-9_-]+)")
 
     fun isPlaylistLink(url: String): Boolean {

@@ -6,6 +6,7 @@ plugins {
 
 android {
     namespace = "com.example.myapp"
+
     compileSdk {
         version = release(37)
     }
@@ -18,6 +19,15 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val youtubeApiKey =
+            project.properties["YOUTUBE_API_KEY"] as String? ?: ""
+
+        buildConfigField(
+            "String",
+            "YOUTUBE_API_KEY",
+            "\"$youtubeApiKey\""
+        )
     }
 
     buildTypes {
@@ -35,6 +45,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
