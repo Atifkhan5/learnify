@@ -30,10 +30,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.util.Log
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
 
@@ -43,7 +45,6 @@ private val LearnifyText = Color(0xFF1E293B)
 private val LearnifyGray = Color(0xFF64748B)
 private val LearnifyCardBg = Color(0xFFF8FAFC)
 
-// Wraps a Course with the current user's progress on it.
 data class EnrolledCourse(
     val course: Course,
     val completedLessons: Int,
@@ -66,10 +67,16 @@ fun MyCoursesScreen(
     LaunchedEffect(Unit) {
         try {
             enrolledCourses = CourseRepository.getEnrolledCourses()
+            // DEBUG: confirm what the repository actually returned
+            Log.d("COURSES_DEBUG", "Loaded ${enrolledCourses.size} courses")
+            enrolledCourses.forEach {
+                Log.d("COURSES_DEBUG", "Course: ${it.course.title}, thumbnailUrl: '${it.course.thumbnailUrl}'")
+            }
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
             loadError = exception.message ?: "Failed to load your courses"
+            Log.e("COURSES_DEBUG", "Failed to load courses", exception)
         } finally {
             isLoading = false
         }
@@ -177,6 +184,11 @@ private fun EnrolledCourseCard(
 ) {
     val course = enrolled.course
 
+    // DEBUG: log the URL each card actually receives
+    LaunchedEffect(course.thumbnailUrl) {
+        Log.d("THUMBNAIL_DEBUG", "Course: ${course.title}, URL: '${course.thumbnailUrl}'")
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -191,6 +203,8 @@ private fun EnrolledCourseCard(
             AsyncImage(
                 model = course.thumbnailUrl,
                 contentDescription = course.title,
+                placeholder = ColorPainter(Color.LightGray), // shown while loading
+                error = ColorPainter(Color.Red),             // shown if load fails — diagnostic
                 modifier = Modifier
                     .size(64.dp)
                     .clip(RoundedCornerShape(12.dp)),

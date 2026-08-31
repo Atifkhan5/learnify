@@ -35,7 +35,7 @@ object YouTubePlaylistRepository {
                             "?part=snippet" +
                             "&maxResults=50" +
                             "&playlistId=$encodedPlaylistId" +
-                            "&key=$YOUTUBE_API_KEY" +
+                            "&key=$youtubeApiKey" +
                             pageTokenParam
 
                 val connection = URL(urlString).openConnection() as HttpURLConnection

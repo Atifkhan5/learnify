@@ -36,10 +36,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.util.Log
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -87,10 +89,17 @@ fun HomeTab(
                 featuredCourses = featuredDeferred.await()
                 popularCourses = popularDeferred.await()
             }
+
+            // DEBUG: confirm what the repository actually returned
+            Log.d("HOME_DEBUG", "allCourses=${allCourses.size} featured=${featuredCourses.size} popular=${popularCourses.size}")
+            allCourses.forEach {
+                Log.d("HOME_DEBUG", "Course: ${it.title}, thumbnailUrl: '${it.thumbnailUrl}'")
+            }
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
             loadError = exception.message ?: "Failed to load courses"
+            Log.e("HOME_DEBUG", "Failed to load courses", exception)
         } finally {
             isLoading = false
         }
@@ -369,6 +378,8 @@ private fun CourseCard(
         AsyncImage(
             model = course.thumbnailUrl,
             contentDescription = course.title,
+            placeholder = ColorPainter(Color.LightGray), // shown while loading
+            error = ColorPainter(Color.Red),             // shown if load fails — diagnostic
             modifier = Modifier
                 .fillMaxWidth()
                 .height(100.dp)
@@ -424,6 +435,8 @@ private fun CourseListItem(
         AsyncImage(
             model = course.thumbnailUrl,
             contentDescription = course.title,
+            placeholder = ColorPainter(Color.LightGray), // shown while loading
+            error = ColorPainter(Color.Red),             // shown if load fails — diagnostic
             modifier = Modifier
                 .size(64.dp)
                 .clip(RoundedCornerShape(12.dp)),

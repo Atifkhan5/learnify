@@ -3,10 +3,14 @@ package com.example.myapp
 import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
+import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
@@ -46,7 +50,6 @@ private val LearnifyGreen = Color(0xFF16A34A)
 private val LearnifyDark = Color(0xFF172554)
 private val LearnifyGray = Color(0xFF64748B)
 
-// Minimal lesson model — adjust fields to match your Firestore "lessons" schema.
 data class Lesson(
     val id: Int = 0,
     val title: String = "",
@@ -54,12 +57,8 @@ data class Lesson(
     val durationMinutes: Int = 0
 )
 
-// Fraction of the video that must be watched before a lesson auto-completes.
 private const val COMPLETION_THRESHOLD = 0.75
 
-// Injected into YouTube's own embed page after it loads. Polls the page's
-// <video> element directly (no custom wrapper page, no CORS issues) and
-// calls back into Kotlin once the watch threshold is crossed.
 private const val PROGRESS_TRACKING_SCRIPT = """
     (function() {
         if (window.__progressTrackerInstalled) return;
@@ -91,8 +90,6 @@ fun LessonPlayerScreen(
 ) {
     var completed by remember(isCompleted) { mutableStateOf(isCompleted) }
     var saveError by remember { mutableStateOf<String?>(null) }
-
-    // Set by the WebView's JS bridge once the watch threshold is crossed.
     var thresholdReached by remember { mutableStateOf(false) }
 
     LaunchedEffect(thresholdReached) {
@@ -204,9 +201,6 @@ private fun YouTubeWebView(
     val context = LocalContext.current
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
-    // Bridges the WebView's JavaScript back to Kotlin. JS interface callbacks
-    // run on a background thread, so we hop back to the main thread before
-    // touching Compose state.
     val bridge = remember {
         object {
             @JavascriptInterface
@@ -224,48 +218,67 @@ private fun YouTubeWebView(
                 settings.useWideViewPort = true
                 settings.loadWithOverviewMode = true
                 settings.domStorageEnabled = true
+                settings.databaseEnabled = true
+                settings.allowFileAccess = true
+                settings.allowContentAccess = true
                 settings.mediaPlaybackRequiresUserGesture = false
                 settings.setSupportZoom(false)
                 settings.builtInZoomControls = false
 
-                // YouTube's embedded player needs cookies to work correctly.
-                // WebView doesn't accept them by default, which is a common
-                // cause of "There was a problem with the player configuration".
                 CookieManager.getInstance().setAcceptCookie(true)
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
-                // A default WebView user-agent can be treated differently by
-                // YouTube than a normal mobile browser; this avoids that.
                 settings.userAgentString =
                     "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 " +
                             "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
-                // Required for YouTube's video surface to actually render
-                // instead of showing black in some WebViews.
                 setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
-                webChromeClient = WebChromeClient()
+                webChromeClient = object : WebChromeClient() {
+                    override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                        Log.d(
+                            "YT_WEBVIEW",
+                            "JS: ${consoleMessage.message()} (line ${consoleMessage.lineNumber()})"
+                        )
+                        return true
+                    }
+                }
 
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, url: String?) {
                         super.onPageFinished(view, url)
+                        Log.d("YT_WEBVIEW", "Page finished loading: $url")
                         view.evaluateJavascript(PROGRESS_TRACKING_SCRIPT, null)
+                    }
+
+                    override fun onReceivedError(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                        error: WebResourceError?
+                    ) {
+                        super.onReceivedError(view, request, error)
+                        Log.e(
+                            "YT_WEBVIEW",
+                            "Error loading ${request?.url}: ${error?.description} (code ${error?.errorCode})"
+                        )
                     }
                 }
 
                 addJavascriptInterface(bridge, "AndroidBridge")
 
-                loadUrl("https://www.youtube.com/embed/$videoId?playsinline=1&rel=0")
+                val urlToLoad = "https://www.youtube.com/embed/$videoId?enablejsapi=1&playsinline=1&rel=0"
+                Log.d("YT_WEBVIEW", "Loading URL: $urlToLoad")
+                
+                // Set Referer to avoid embed restrictions
+                val headers = mapOf("Referer" to "https://www.youtube.com")
+                loadUrl(urlToLoad, headers)
             }
         }
     )
 }
 
-// Extracts a YouTube video ID from common URL formats, in case lessons
-// store full URLs instead of bare IDs in Firestore.
-// Handles: youtu.be/ID, youtube.com/watch?v=ID, youtube.com/embed/ID
 fun extractYoutubeVideoId(urlOrId: String): String {
-    val watchRegex = Regex("(?:youtu\\.be/|watch\\?v=|embed/)([a-zA-Z0-9_-]{11})")
-    val match = watchRegex.find(urlOrId)
-    return match?.groupValues?.get(1) ?: urlOrId
+    val videoIdRegex = Regex("^(?:https?://)?(?:www\\.)?(?:youtube\\.com/(?:watch\\?v=|embed/)|youtu\\.be/)?([a-zA-Z0-9_-]{11})(?:[?&].*)?$")
+    val match = videoIdRegex.find(urlOrId.trim())
+    return match?.groupValues?.get(1) ?: urlOrId.trim()
 }

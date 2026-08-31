@@ -1,5 +1,8 @@
 package com.example.myapp
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,10 +20,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,10 +39,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 
 private val LearnifyBlue = Color(0xFF2563EB)
@@ -55,7 +62,7 @@ fun AdminScreen(modifier: Modifier = Modifier) {
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "You don't have access to this screen",
+                text = "You dont have access to this screen",
                 color = LearnifyGray
             )
         }
@@ -65,12 +72,39 @@ fun AdminScreen(modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
 
     var title by remember { mutableStateOf("") }
-    var thumbnailUrl by remember { mutableStateOf("") }
     var instructorName by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
     var durationMinutesText by remember { mutableStateOf("") }
     var youtubeLink by remember { mutableStateOf("") }
+
+    // Thumbnail: local picked image + upload state
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var uploadedThumbnailUrl by remember { mutableStateOf<String?>(null) }
+    var isUploadingImage by remember { mutableStateOf(false) }
+    var uploadError by remember { mutableStateOf<String?>(null) }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            selectedImageUri = uri
+            uploadedThumbnailUrl = null
+            uploadError = null
+
+            isUploadingImage = true
+            scope.launch {
+                try {
+                    uploadedThumbnailUrl = CourseRepository.uploadThumbnail(uri)
+                } catch (exception: Exception) {
+                    uploadError = exception.message ?: "Failed to upload image"
+                    selectedImageUri = null
+                } finally {
+                    isUploadingImage = false
+                }
+            }
+        }
+    }
 
     var isSaving by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
@@ -122,13 +156,84 @@ fun AdminScreen(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        OutlinedTextField(
-            value = thumbnailUrl,
-            onValueChange = { thumbnailUrl = it },
-            label = { Text("Thumbnail image URL") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+        // --- Thumbnail picker ---
+        Text(
+            text = "Thumbnail image",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = LearnifyText
         )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(160.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(LearnifyCardBg)
+                .clickable {
+                    imagePickerLauncher.launch(
+                        androidx.activity.result.PickVisualMediaRequest(
+                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                        )
+                    )
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            when {
+                isUploadingImage -> {
+                    CircularProgressIndicator(color = LearnifyBlue)
+                }
+                selectedImageUri != null -> {
+                    AsyncImage(
+                        model = selectedImageUri,
+                        contentDescription = "Selected thumbnail",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(14.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                else -> {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Filled.Image,
+                            contentDescription = null,
+                            tint = LearnifyGray
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Tap to choose an image",
+                            fontSize = 12.sp,
+                            color = LearnifyGray
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = {
+                imagePickerLauncher.launch(
+                    androidx.activity.result.PickVisualMediaRequest(
+                        ActivityResultContracts.PickVisualMedia.ImageOnly
+                    )
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isUploadingImage
+        ) {
+            Text(if (selectedImageUri == null) "Choose Image" else "Change Image")
+        }
+
+        if (uploadError != null) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(text = "Upload failed: $uploadError", color = Color.Red, fontSize = 12.sp)
+        }
 
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -198,8 +303,14 @@ fun AdminScreen(modifier: Modifier = Modifier) {
                 saveError = null
                 saveSuccess = null
 
-                if (title.isBlank() || thumbnailUrl.isBlank() || youtubeLink.isBlank()) {
-                    saveError = "Title, thumbnail URL, and YouTube link are required"
+                val thumbnailUrl = uploadedThumbnailUrl
+
+                if (title.isBlank() || thumbnailUrl.isNullOrBlank() || youtubeLink.isBlank()) {
+                    saveError = when {
+                        thumbnailUrl.isNullOrBlank() && isUploadingImage -> "Please wait for the image to finish uploading"
+                        thumbnailUrl.isNullOrBlank() -> "Please choose a thumbnail image"
+                        else -> "Title and YouTube link are required"
+                    }
                     return@Button
                 }
 
@@ -210,7 +321,7 @@ fun AdminScreen(modifier: Modifier = Modifier) {
                             title = title.trim(),
                             instructorName = instructorName.trim(),
                             description = description.trim(),
-                            thumbnailUrl = thumbnailUrl.trim(),
+                            thumbnailUrl = thumbnailUrl,
                             durationMinutes = durationMinutesText.toIntOrNull() ?: 0,
                             category = category.trim(),
                             featured = false,
@@ -243,12 +354,13 @@ fun AdminScreen(modifier: Modifier = Modifier) {
                         }
 
                         title = ""
-                        thumbnailUrl = ""
                         instructorName = ""
                         description = ""
                         category = ""
                         durationMinutesText = ""
                         youtubeLink = ""
+                        selectedImageUri = null
+                        uploadedThumbnailUrl = null
 
                         refreshCourses()
 
@@ -259,7 +371,7 @@ fun AdminScreen(modifier: Modifier = Modifier) {
                     }
                 }
             },
-            enabled = !isSaving,
+            enabled = !isSaving && !isUploadingImage,
             modifier = Modifier.fillMaxWidth()
         ) {
             if (isSaving) {

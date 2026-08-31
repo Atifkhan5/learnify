@@ -1,8 +1,11 @@
 package com.example.myapp
 
+import android.net.Uri
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.tasks.await
+import java.util.UUID
 
 data class Course(
     val id: String = "",
@@ -23,7 +26,9 @@ object CourseRepository {
 
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
+    private val storage = FirebaseStorage.getInstance()
     private val coursesCollection = firestore.collection("courses")
+    private val thumbnailsRef get() = storage.reference.child("course_thumbnails")
 
     fun isCurrentUserAdmin(): Boolean {
         return auth.currentUser?.email == ADMIN_EMAIL
@@ -60,8 +65,6 @@ object CourseRepository {
         return doc.toObject(Course::class.java)?.copy(id = doc.id)
     }
 
-    // Builds the "My Courses" list by combining each enrollment record
-    // (from CourseProgressRepository's Firestore structure) with its course details.
     suspend fun getEnrolledCourses(): List<EnrolledCourse> {
         val uid = auth.currentUser?.uid ?: return emptyList()
 
@@ -89,7 +92,6 @@ object CourseRepository {
         }
     }
 
-    // Fetches the lessons subcollection for a given course.
     suspend fun getLessons(courseId: String): List<Lesson> {
         return coursesCollection
             .document(courseId)
@@ -102,8 +104,29 @@ object CourseRepository {
             }
     }
 
-    // Admin only: creates a new course document, plus one lesson per
-    // (title, youtubeVideoId) pair, in order. Returns the new course's id.
+    suspend fun uploadThumbnail(uri: Uri): String {
+        val bucket = storage.app.options.storageBucket
+        if (bucket.isNullOrBlank()) {
+            throw Exception("Firebase Storage bucket is not configured. Please check your google-services.json and ensure Storage is enabled in the Firebase Console.")
+        }
+
+        val fileName = "${UUID.randomUUID()}.jpg"
+        val fileRef = thumbnailsRef.child(fileName)
+        
+        try {
+            val uploadTask = fileRef.putFile(uri)
+            val snapshot = uploadTask.await()
+            
+            return snapshot.metadata?.reference?.downloadUrl?.await()?.toString()
+                ?: throw Exception("Could not get download URL")
+        } catch (e: Exception) {
+            if (e.message?.contains("Object does not exist", ignoreCase = true) == true) {
+                throw Exception("Storage location not found. Ensure you have clicked 'Get Started' in the Storage tab of your Firebase Console and your bucket name matches your project ID.")
+            }
+            throw e
+        }
+    }
+
     suspend fun addCourseWithLessons(course: Course, lessons: List<Pair<String, String>>): String {
         val docRef = coursesCollection.document()
         docRef.set(course.copy(id = docRef.id)).await()
@@ -121,12 +144,10 @@ object CourseRepository {
         return docRef.id
     }
 
-    // Convenience wrapper for the single-video case.
     suspend fun addCourse(course: Course, youtubeVideoId: String): String {
         return addCourseWithLessons(course, listOf("Lesson 1" to youtubeVideoId))
     }
 
-    // Admin only: deletes a course and every lesson document under it.
     suspend fun deleteCourse(courseId: String) {
         val lessonDocs = coursesCollection
             .document(courseId)
