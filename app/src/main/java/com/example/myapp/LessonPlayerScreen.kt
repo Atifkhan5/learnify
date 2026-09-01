@@ -1,15 +1,18 @@
 package com.example.myapp
 
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color as AndroidColor
 import android.net.Uri
-import android.os.Handler
-import android.os.Looper
+import android.util.Log
+import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
-import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
@@ -105,10 +108,17 @@ fun LessonPlayerScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
+                .padding(
+                    horizontal = 4.dp,
+                    vertical = 4.dp
+                ),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBackClick) {
+
+            IconButton(
+                onClick = onBackClick
+            ) {
+
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
@@ -119,36 +129,53 @@ fun LessonPlayerScreen(
 
         YouTubeWebView(
             videoId = lesson.youtubeVideoId,
-            onError = { playerError = true },
+            onError = {
+                playerError = true
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
         )
 
         if (playerError) {
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .padding(
+                        horizontal = 20.dp,
+                        vertical = 12.dp
+                    )
             ) {
+
                 Text(
-                    text = "This video couldn't be loaded. Watch it on YouTube by pressing the button below.",
+                    text = "This video couldn't be loaded in the app. Watch it directly on YouTube below.",
                     fontSize = 13.sp,
                     color = LearnifyGray
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(
+                    modifier = Modifier.height(10.dp)
+                )
 
                 Button(
                     onClick = {
-                        openInYoutube(context, lesson.youtubeVideoId)
+                        openInYoutube(
+                            context = context,
+                            videoId = lesson.youtubeVideoId
+                        )
                     }
                 ) {
+
                     Icon(
                         imageVector = Icons.Filled.PlayArrow,
                         contentDescription = null
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Spacer(
+                        modifier = Modifier.width(6.dp)
+                    )
+
                     Text("Watch on YouTube")
                 }
             }
@@ -157,6 +184,7 @@ fun LessonPlayerScreen(
         Column(
             modifier = Modifier.padding(20.dp)
         ) {
+
             Text(
                 text = lesson.title,
                 fontSize = 20.sp,
@@ -164,7 +192,9 @@ fun LessonPlayerScreen(
                 color = LearnifyDark
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(
+                modifier = Modifier.height(4.dp)
+            )
 
             Text(
                 text = "${lesson.durationMinutes} min",
@@ -172,22 +202,34 @@ fun LessonPlayerScreen(
                 color = LearnifyGray
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(
+                modifier = Modifier.height(16.dp)
+            )
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
                 if (completed) {
+
                     Icon(
                         imageVector = Icons.Filled.CheckCircle,
                         contentDescription = null,
                         tint = LearnifyGreen
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Spacer(
+                        modifier = Modifier.width(8.dp)
+                    )
+
                     Text(
                         text = "Completed",
                         color = LearnifyGreen,
                         fontWeight = FontWeight.SemiBold
                     )
+
                 } else {
+
                     Text(
                         text = "Watch the lesson to complete it",
                         color = LearnifyGray,
@@ -196,23 +238,37 @@ fun LessonPlayerScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(
+                modifier = Modifier.height(20.dp)
+            )
 
             if (completionError != null) {
+
                 Text(
                     text = "Couldn't save progress: $completionError",
                     color = Color.Red,
                     fontSize = 13.sp
                 )
-                Spacer(modifier = Modifier.height(10.dp))
+
+                Spacer(
+                    modifier = Modifier.height(10.dp)
+                )
             }
 
             if (!completed) {
+
                 if (!showCompletionPrompt) {
-                    Button(onClick = { showCompletionPrompt = true }) {
+
+                    Button(
+                        onClick = {
+                            showCompletionPrompt = true
+                        }
+                    ) {
                         Text("Mark lesson progress")
                     }
+
                 } else {
+
                     Text(
                         text = "Did you finish the lesson?",
                         fontSize = 15.sp,
@@ -220,16 +276,24 @@ fun LessonPlayerScreen(
                         color = LearnifyDark
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(
+                        modifier = Modifier.height(10.dp)
+                    )
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+
                         Button(
                             onClick = {
+
                                 completionError = null
                                 isSavingCompletion = true
 
                                 scope.launch {
+
                                     try {
+
                                         CourseRepository.markLessonCompleted(
                                             courseId = courseId,
                                             lessonId = lesson.id,
@@ -238,15 +302,21 @@ fun LessonPlayerScreen(
 
                                         completed = true
                                         showCompletionPrompt = false
+
                                         onLessonCompleted()
 
                                         if (hasNextLesson) {
                                             onNextLesson()
                                         }
+
                                     } catch (exception: Exception) {
+
                                         completionError =
-                                            exception.message ?: "Something went wrong"
+                                            exception.message
+                                                ?: "Something went wrong"
+
                                     } finally {
+
                                         isSavingCompletion = false
                                     }
                                 }
@@ -256,20 +326,29 @@ fun LessonPlayerScreen(
                                 containerColor = LearnifyGreen
                             )
                         ) {
+
                             if (isSavingCompletion) {
+
                                 CircularProgressIndicator(
                                     modifier = Modifier.height(16.dp),
-                                    color = Color.White
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
                                 )
+
                             } else {
+
                                 Text("Yes")
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(
+                            modifier = Modifier.width(12.dp)
+                        )
 
                         OutlinedButton(
-                            onClick = { showCompletionPrompt = false },
+                            onClick = {
+                                showCompletionPrompt = false
+                            },
                             enabled = !isSavingCompletion
                         ) {
                             Text("No")
@@ -281,64 +360,53 @@ fun LessonPlayerScreen(
     }
 }
 
-private fun openInYoutube(context: android.content.Context, videoId: String) {
-    val webUrl = "https://www.youtube.com/watch?v=$videoId"
+private fun openInYoutube(
+    context: Context,
+    videoId: String
+) {
+    val cleanId = extractYoutubeVideoId(videoId)
 
-    val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:$videoId")).apply {
+    if (cleanId.isBlank()) {
+        return
+    }
+
+    val youtubeAppIntent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("vnd.youtube:$cleanId")
+    ).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 
     try {
-        context.startActivity(appIntent)
-    } catch (e: android.content.ActivityNotFoundException) {
-        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(webUrl)).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+        context.startActivity(youtubeAppIntent)
+
+    } catch (exception: ActivityNotFoundException) {
+
+        val browserIntent = Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse(
+                "https://www.youtube.com/watch?v=$cleanId"
+            )
+        ).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+            )
         }
-        context.startActivity(browserIntent)
+
+        try {
+
+            context.startActivity(browserIntent)
+
+        } catch (browserException: Exception) {
+
+            Log.e(
+                "LearnifyYouTube",
+                "Unable to open YouTube",
+                browserException
+            )
+        }
     }
 }
-
-private class YoutubeErrorBridge(private val onError: () -> Unit) {
-    @JavascriptInterface
-    fun onPlayerError(errorCode: String) {
-        Handler(Looper.getMainLooper()).post {
-            onError()
-        }
-    }
-}
-
-private fun buildEmbedHtml(videoId: String): String = """
-    <html>
-      <head>
-        <style>
-          html, body { margin: 0; padding: 0; background: #000; height: 100%; }
-          #player { width: 100%; height: 100%; }
-        </style>
-      </head>
-      <body>
-        <div id="player"></div>
-        <script src="https://www.youtube.com/iframe_api"></script>
-        <script>
-          var player;
-          function onYouTubeIframeAPIReady() {
-            player = new YT.Player('player', {
-              videoId: '$videoId',
-              playerVars: {
-                'playsinline': 1,
-                'controls': 1,
-                'rel': 0
-              },
-              events: {
-                'onError': function(event) {
-                  AndroidBridge.onPlayerError(String(event.data));
-                }
-              }
-            });
-          }
-        </script>
-      </body>
-    </html>
-""".trimIndent()
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -347,122 +415,367 @@ private fun YouTubeWebView(
     onError: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
+    val cleanVideoId = remember(videoId) {
+        extractYoutubeVideoId(videoId)
+    }
 
     AndroidView(
         modifier = modifier,
-        factory = {
-            WebView.setWebContentsDebuggingEnabled(true)
+
+        factory = { context ->
 
             WebView(context).apply {
-                setBackgroundColor(AndroidColor.BLACK)
+
+                setBackgroundColor(
+                    AndroidColor.BLACK
+                )
 
                 settings.apply {
+
                     javaScriptEnabled = true
+
                     domStorageEnabled = true
+
                     databaseEnabled = true
-                    mediaPlaybackRequiresUserGesture = false
-                    javaScriptCanOpenWindowsAutomatically = true
+
+                    mediaPlaybackRequiresUserGesture = true
+
+                    javaScriptCanOpenWindowsAutomatically = false
+
                     loadsImagesAutomatically = true
+
                     blockNetworkImage = false
-                    allowFileAccess = true
+
+                    allowFileAccess = false
+
                     allowContentAccess = true
+
                     setSupportZoom(false)
+
                     builtInZoomControls = false
+
                     displayZoomControls = false
+
+                    useWideViewPort = true
+
+                    loadWithOverviewMode = false
+
+                    cacheMode = WebSettings.LOAD_DEFAULT
+
                     mixedContentMode =
-                        android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                        WebSettings.MIXED_CONTENT_NEVER_ALLOW
+
+                    userAgentString =
+                        WebSettings.getDefaultUserAgent(context)
                 }
 
-                CookieManager.getInstance().setAcceptCookie(true)
-                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                CookieManager
+                    .getInstance()
+                    .setAcceptCookie(true)
 
-                addJavascriptInterface(YoutubeErrorBridge(onError), "AndroidBridge")
-
-                webChromeClient = object : WebChromeClient() {
-                    override fun onConsoleMessage(
-                        message: android.webkit.ConsoleMessage
-                    ): Boolean {
-                        android.util.Log.d(
-                            "LearnifyYouTube",
-                            "${message.message()} | line=${message.lineNumber()} | source=${message.sourceId()}"
-                        )
-                        return true
-                    }
-                }
-
-                webViewClient = object : WebViewClient() {
-                    override fun shouldOverrideUrlLoading(
-                        view: WebView?,
-                        request: WebResourceRequest?
-                    ): Boolean {
-                        return false
-                    }
-
-                    override fun onPageFinished(view: WebView?, url: String?) {
-                        super.onPageFinished(view, url)
-                        android.util.Log.d("LearnifyYouTube", "Page loaded: $url")
-                    }
-
-                    override fun onReceivedError(
-                        view: WebView?,
-                        request: WebResourceRequest?,
-                        error: android.webkit.WebResourceError?
-                    ) {
-                        super.onReceivedError(view, request, error)
-                        android.util.Log.e(
-                            "LearnifyYouTube",
-                            "Error ${error?.errorCode}: ${error?.description} URL=${request?.url}"
-                        )
-                        onError()
-                    }
-                }
-
-                val id = extractYoutubeVideoId(videoId)
-
-                android.util.Log.d("LearnifyYouTube", "Input: $videoId")
-                android.util.Log.d("LearnifyYouTube", "Extracted ID: $id")
-
-                if (id.isNotBlank()) {
-                    loadDataWithBaseURL(
-                        "https://www.youtube.com",
-                        buildEmbedHtml(id),
-                        "text/html",
-                        "UTF-8",
-                        null
+                CookieManager
+                    .getInstance()
+                    .setAcceptThirdPartyCookies(
+                        this,
+                        true
                     )
-                } else {
-                    android.util.Log.e("LearnifyYouTube", "Invalid YouTube video ID")
-                    onError()
-                }
+
+                webChromeClient =
+                    object : WebChromeClient() {
+
+                        override fun onConsoleMessage(
+                            message: ConsoleMessage
+                        ): Boolean {
+
+                            Log.d(
+                                "LearnifyYouTube",
+                                "${message.message()} | " +
+                                        "line=${message.lineNumber()} | " +
+                                        "source=${message.sourceId()}"
+                            )
+
+                            return true
+                        }
+                    }
+
+                webViewClient =
+                    object : WebViewClient() {
+
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView?,
+                            request: WebResourceRequest?
+                        ): Boolean {
+
+                            return false
+                        }
+
+                        override fun onReceivedError(
+                            view: WebView?,
+                            request: WebResourceRequest?,
+                            error: WebResourceError?
+                        ) {
+
+                            super.onReceivedError(
+                                view,
+                                request,
+                                error
+                            )
+
+                            if (
+                                request != null &&
+                                request.isForMainFrame
+                            ) {
+
+                                Log.e(
+                                    "LearnifyYouTube",
+                                    "WebView error " +
+                                            "${error?.errorCode}: " +
+                                            "${error?.description}"
+                                )
+
+                                onError()
+                            }
+                        }
+
+                        override fun onPageStarted(
+                            view: WebView?,
+                            url: String?,
+                            favicon: android.graphics.Bitmap?
+                        ) {
+
+                            super.onPageStarted(
+                                view,
+                                url,
+                                favicon
+                            )
+
+                            Log.d(
+                                "LearnifyYouTube",
+                                "Page started: $url"
+                            )
+                        }
+
+                        override fun onPageFinished(
+                            view: WebView?,
+                            url: String?
+                        ) {
+
+                            super.onPageFinished(
+                                view,
+                                url
+                            )
+
+                            Log.d(
+                                "LearnifyYouTube",
+                                "Page finished: $url"
+                            )
+                        }
+                    }
             }
         },
-        update = { }
+
+        update = { webView ->
+
+            if (cleanVideoId.isBlank()) {
+
+                Log.e(
+                    "LearnifyYouTube",
+                    "Invalid YouTube ID: $videoId"
+                )
+
+                onError()
+
+                return@AndroidView
+            }
+
+            val embedUrl =
+                "https://www.youtube.com/embed/$cleanVideoId" +
+                        "?autoplay=0" +
+                        "&playsinline=1" +
+                        "&controls=1" +
+                        "&rel=0" +
+                        "&enablejsapi=1"
+
+            if (webView.tag != embedUrl) {
+
+                webView.tag = embedUrl
+
+                Log.d(
+                    "LearnifyYouTube",
+                    "Loading: $embedUrl"
+                )
+
+                val headers = mapOf(
+                    "Referer" to "https://www.google.com/"
+                )
+
+                webView.loadUrl(
+                    embedUrl,
+                    headers
+                )
+            }
+        }
     )
 }
 
-private fun extractYoutubeVideoId(urlOrId: String): String {
-    val input = urlOrId.trim()
+private fun extractYoutubeVideoId(
+    urlOrId: String
+): String {
+
+    var input = urlOrId.trim()
 
     if (input.isEmpty()) {
         return ""
     }
 
+    input = input
+        .removePrefix("\"")
+        .removeSuffix("\"")
+        .removePrefix("'")
+        .removeSuffix("'")
+        .trim()
+
+    val directIdPattern =
+        Regex(
+            "^[a-zA-Z0-9_-]{11}$"
+        )
+
+    if (directIdPattern.matches(input)) {
+        return input
+    }
+
+    try {
+
+        val uri = Uri.parse(input)
+
+        val host =
+            uri.host
+                ?.lowercase()
+                ?: ""
+
+        val path =
+            uri.path
+                ?: ""
+
+        if (
+            host == "youtube.com" ||
+            host == "www.youtube.com" ||
+            host == "m.youtube.com"
+        ) {
+
+            val watchId =
+                uri.getQueryParameter("v")
+
+            if (
+                watchId != null &&
+                directIdPattern.matches(watchId)
+            ) {
+                return watchId
+            }
+
+            if (path.startsWith("/embed/")) {
+
+                val id =
+                    path
+                        .removePrefix("/embed/")
+                        .substringBefore("/")
+
+                if (directIdPattern.matches(id)) {
+                    return id
+                }
+            }
+
+            if (path.startsWith("/shorts/")) {
+
+                val id =
+                    path
+                        .removePrefix("/shorts/")
+                        .substringBefore("/")
+
+                if (directIdPattern.matches(id)) {
+                    return id
+                }
+            }
+
+            if (path.startsWith("/live/")) {
+
+                val id =
+                    path
+                        .removePrefix("/live/")
+                        .substringBefore("/")
+
+                if (directIdPattern.matches(id)) {
+                    return id
+                }
+            }
+        }
+
+        if (
+            host == "youtu.be" ||
+            host == "www.youtu.be"
+        ) {
+
+            val id =
+                path
+                    .removePrefix("/")
+                    .substringBefore("/")
+
+            if (directIdPattern.matches(id)) {
+                return id
+            }
+        }
+
+        if (
+            host == "youtube-nocookie.com" ||
+            host == "www.youtube-nocookie.com"
+        ) {
+
+            if (path.startsWith("/embed/")) {
+
+                val id =
+                    path
+                        .removePrefix("/embed/")
+                        .substringBefore("/")
+
+                if (directIdPattern.matches(id)) {
+                    return id
+                }
+            }
+        }
+
+    } catch (exception: Exception) {
+
+        Log.e(
+            "LearnifyYouTube",
+            "URL parsing failed",
+            exception
+        )
+    }
+
     val patterns = listOf(
-        Regex("""(?:youtube\.com/watch\?v=)([a-zA-Z0-9_-]{11})"""),
-        Regex("""(?:www\.youtube\.com/watch\?v=)([a-zA-Z0-9_-]{11})"""),
-        Regex("""(?:m\.youtube\.com/watch\?v=)([a-zA-Z0-9_-]{11})"""),
-        Regex("""(?:youtu\.be/)([a-zA-Z0-9_-]{11})"""),
-        Regex("""(?:www\.youtu\.be/)([a-zA-Z0-9_-]{11})"""),
-        Regex("""(?:youtube\.com/embed/)([a-zA-Z0-9_-]{11})"""),
-        Regex("""(?:www\.youtube\.com/embed/)([a-zA-Z0-9_-]{11})"""),
-        Regex("""(?:youtube-nocookie\.com/embed/)([a-zA-Z0-9_-]{11})"""),
-        Regex("""(?:www\.youtube-nocookie\.com/embed/)([a-zA-Z0-9_-]{11})"""),
-        Regex("""^([a-zA-Z0-9_-]{11})$""")
+
+        Regex(
+            """youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})"""
+        ),
+
+        Regex(
+            """youtube\.com/embed/([a-zA-Z0-9_-]{11})"""
+        ),
+
+        Regex(
+            """youtube-nocookie\.com/embed/([a-zA-Z0-9_-]{11})"""
+        ),
+
+        Regex(
+            """youtu\.be/([a-zA-Z0-9_-]{11})"""
+        )
     )
 
     for (pattern in patterns) {
-        val match = pattern.find(input)
+
+        val match =
+            pattern.find(input)
+
         if (match != null) {
             return match.groupValues[1]
         }
