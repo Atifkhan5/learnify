@@ -4,9 +4,12 @@ import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.util.Log
+import android.view.View
+import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
@@ -15,6 +18,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -62,6 +66,28 @@ data class Lesson(
     val youtubeVideoId: String = "",
     val durationMinutes: Int = 0
 )
+
+private class YouTubeWebViewContainer(
+    context: Context
+) : FrameLayout(context) {
+
+    val webView: WebView
+
+    var customView: View? = null
+    var customViewCallback: WebChromeClient.CustomViewCallback? = null
+
+    init {
+
+        webView = WebView(context)
+
+        webView.layoutParams = LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+
+        addView(webView)
+    }
+}
 
 @Composable
 fun LessonPlayerScreen(
@@ -389,8 +415,7 @@ private fun openInYoutube(
                 "https://www.youtube.com/watch?v=$cleanId"
             )
         ).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-            )
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 
         try {
@@ -424,157 +449,215 @@ private fun YouTubeWebView(
 
         factory = { context ->
 
-            WebView(context).apply {
+            val container = YouTubeWebViewContainer(context)
+            val webView = container.webView
 
-                setBackgroundColor(
-                    AndroidColor.BLACK
+            webView.setBackgroundColor(AndroidColor.BLACK)
+
+            webView.settings.apply {
+
+                javaScriptEnabled = true
+
+                domStorageEnabled = true
+
+                databaseEnabled = true
+
+                mediaPlaybackRequiresUserGesture = false
+
+                javaScriptCanOpenWindowsAutomatically = false
+
+                loadsImagesAutomatically = true
+
+                blockNetworkImage = false
+
+                allowFileAccess = false
+
+                allowContentAccess = true
+
+                setSupportZoom(false)
+
+                builtInZoomControls = false
+
+                displayZoomControls = false
+
+                useWideViewPort = true
+
+                loadWithOverviewMode = false
+
+                cacheMode = WebSettings.LOAD_DEFAULT
+
+                mixedContentMode =
+                    WebSettings.MIXED_CONTENT_NEVER_ALLOW
+
+                userAgentString =
+                    WebSettings.getDefaultUserAgent(context)
+            }
+
+            CookieManager
+                .getInstance()
+                .setAcceptCookie(true)
+
+            CookieManager
+                .getInstance()
+                .setAcceptThirdPartyCookies(
+                    webView,
+                    true
                 )
 
-                settings.apply {
+            webView.webChromeClient =
+                object : WebChromeClient() {
 
-                    javaScriptEnabled = true
+                    override fun onConsoleMessage(
+                        message: ConsoleMessage
+                    ): Boolean {
 
-                    domStorageEnabled = true
+                        Log.d(
+                            "LearnifyYouTube",
+                            "${message.message()} | " +
+                                    "line=${message.lineNumber()} | " +
+                                    "source=${message.sourceId()}"
+                        )
 
-                    databaseEnabled = true
+                        return true
+                    }
 
-                    mediaPlaybackRequiresUserGesture = true
+                    override fun getDefaultVideoPoster(): Bitmap {
+                        return Bitmap.createBitmap(
+                            1,
+                            1,
+                            Bitmap.Config.ARGB_8888
+                        )
+                    }
 
-                    javaScriptCanOpenWindowsAutomatically = false
+                    override fun onShowCustomView(
+                        view: View?,
+                        callback: CustomViewCallback?
+                    ) {
 
-                    loadsImagesAutomatically = true
+                        if (view == null) {
+                            return
+                        }
 
-                    blockNetworkImage = false
+                        if (container.customView != null) {
+                            callback?.onCustomViewHidden()
+                            return
+                        }
 
-                    allowFileAccess = false
+                        container.customView = view
+                        container.customViewCallback = callback
 
-                    allowContentAccess = true
+                        webView.visibility = View.GONE
 
-                    setSupportZoom(false)
+                        val params = FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
 
-                    builtInZoomControls = false
+                        container.addView(
+                            view,
+                            params
+                        )
+                    }
 
-                    displayZoomControls = false
+                    override fun onHideCustomView() {
 
-                    useWideViewPort = true
+                        val view = container.customView
 
-                    loadWithOverviewMode = false
+                        if (view != null) {
+                            container.removeView(view)
+                        }
 
-                    cacheMode = WebSettings.LOAD_DEFAULT
+                        container.customView = null
 
-                    mixedContentMode =
-                        WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                        webView.visibility = View.VISIBLE
 
-                    userAgentString =
-                        WebSettings.getDefaultUserAgent(context)
+                        container.customViewCallback
+                            ?.onCustomViewHidden()
+
+                        container.customViewCallback = null
+                    }
                 }
 
-                CookieManager
-                    .getInstance()
-                    .setAcceptCookie(true)
+            webView.webViewClient =
+                object : WebViewClient() {
 
-                CookieManager
-                    .getInstance()
-                    .setAcceptThirdPartyCookies(
-                        this,
-                        true
-                    )
+                    override fun shouldOverrideUrlLoading(
+                        view: WebView?,
+                        request: WebResourceRequest?
+                    ): Boolean {
 
-                webChromeClient =
-                    object : WebChromeClient() {
+                        return false
+                    }
 
-                        override fun onConsoleMessage(
-                            message: ConsoleMessage
-                        ): Boolean {
+                    override fun onReceivedError(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                        error: WebResourceError?
+                    ) {
 
-                            Log.d(
+                        super.onReceivedError(
+                            view,
+                            request,
+                            error
+                        )
+
+                        if (
+                            request != null &&
+                            request.isForMainFrame
+                        ) {
+
+                            Log.e(
                                 "LearnifyYouTube",
-                                "${message.message()} | " +
-                                        "line=${message.lineNumber()} | " +
-                                        "source=${message.sourceId()}"
+                                "WebView error " +
+                                        "${error?.errorCode}: " +
+                                        "${error?.description}"
                             )
 
-                            return true
+                            onError()
                         }
                     }
 
-                webViewClient =
-                    object : WebViewClient() {
+                    override fun onPageStarted(
+                        view: WebView?,
+                        url: String?,
+                        favicon: android.graphics.Bitmap?
+                    ) {
 
-                        override fun shouldOverrideUrlLoading(
-                            view: WebView?,
-                            request: WebResourceRequest?
-                        ): Boolean {
+                        super.onPageStarted(
+                            view,
+                            url,
+                            favicon
+                        )
 
-                            return false
-                        }
-
-                        override fun onReceivedError(
-                            view: WebView?,
-                            request: WebResourceRequest?,
-                            error: WebResourceError?
-                        ) {
-
-                            super.onReceivedError(
-                                view,
-                                request,
-                                error
-                            )
-
-                            if (
-                                request != null &&
-                                request.isForMainFrame
-                            ) {
-
-                                Log.e(
-                                    "LearnifyYouTube",
-                                    "WebView error " +
-                                            "${error?.errorCode}: " +
-                                            "${error?.description}"
-                                )
-
-                                onError()
-                            }
-                        }
-
-                        override fun onPageStarted(
-                            view: WebView?,
-                            url: String?,
-                            favicon: android.graphics.Bitmap?
-                        ) {
-
-                            super.onPageStarted(
-                                view,
-                                url,
-                                favicon
-                            )
-
-                            Log.d(
-                                "LearnifyYouTube",
-                                "Page started: $url"
-                            )
-                        }
-
-                        override fun onPageFinished(
-                            view: WebView?,
-                            url: String?
-                        ) {
-
-                            super.onPageFinished(
-                                view,
-                                url
-                            )
-
-                            Log.d(
-                                "LearnifyYouTube",
-                                "Page finished: $url"
-                            )
-                        }
+                        Log.d(
+                            "LearnifyYouTube",
+                            "Page started: $url"
+                        )
                     }
-            }
+
+                    override fun onPageFinished(
+                        view: WebView?,
+                        url: String?
+                    ) {
+
+                        super.onPageFinished(
+                            view,
+                            url
+                        )
+
+                        Log.d(
+                            "LearnifyYouTube",
+                            "Page finished: $url"
+                        )
+                    }
+                }
+
+            container
         },
 
-        update = { webView ->
+        update = { container ->
+
+            val webView = container.webView
 
             if (cleanVideoId.isBlank()) {
 
