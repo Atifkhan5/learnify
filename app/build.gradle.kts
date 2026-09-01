@@ -1,8 +1,22 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     id("com.google.gms.google-services")
 }
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use {
+        localProperties.load(it)
+    }
+}
+
+val youtubeApiKey =
+    localProperties.getProperty("YOUTUBE_API_KEY", "")
 
 android {
     namespace = "com.example.myapp"
@@ -18,10 +32,8 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        val youtubeApiKey =
-            project.properties["YOUTUBE_API_KEY"] as String? ?: ""
+        testInstrumentationRunner =
+            "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField(
             "String",

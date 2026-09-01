@@ -30,126 +30,280 @@ object CourseRepository {
 
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
-    private val coursesCollection = firestore.collection("courses")
+
+    private val coursesCollection =
+        firestore.collection("courses")
 
     fun isCurrentUserAdmin(): Boolean {
-        return auth.currentUser?.email == ADMIN_EMAIL
+        return auth.currentUser?.email?.equals(
+            ADMIN_EMAIL,
+            ignoreCase = true
+        ) == true
+    }
+
+    private fun requireValidCourseId(
+        courseId: String
+    ): String {
+
+        val id = courseId.trim()
+
+        if (id.isBlank()) {
+            throw Exception("Course ID is empty.")
+        }
+
+        if (id.contains("/")) {
+            throw Exception(
+                "Invalid course ID: course IDs cannot contain '/'."
+            )
+        }
+
+        return id
     }
 
     suspend fun getAllCourses(): List<Course> {
+
         return coursesCollection
             .get()
             .await()
             .documents
-            .mapNotNull { doc ->
-                doc.toObject(Course::class.java)?.copy(id = doc.id)
+            .mapNotNull { document ->
+
+                document
+                    .toObject(Course::class.java)
+                    ?.copy(
+                        id = document.id
+                    )
             }
     }
 
     suspend fun getFeaturedCourses(): List<Course> {
+
         return coursesCollection
-            .whereEqualTo("featured", true)
+            .whereEqualTo(
+                "featured",
+                true
+            )
             .get()
             .await()
             .documents
-            .mapNotNull { doc ->
-                doc.toObject(Course::class.java)?.copy(id = doc.id)
+            .mapNotNull { document ->
+
+                document
+                    .toObject(Course::class.java)
+                    ?.copy(
+                        id = document.id
+                    )
             }
     }
 
     suspend fun getPopularCourses(): List<Course> {
+
         return coursesCollection
-            .whereEqualTo("popular", true)
+            .whereEqualTo(
+                "popular",
+                true
+            )
             .get()
             .await()
             .documents
-            .mapNotNull { doc ->
-                doc.toObject(Course::class.java)?.copy(id = doc.id)
+            .mapNotNull { document ->
+
+                document
+                    .toObject(Course::class.java)
+                    ?.copy(
+                        id = document.id
+                    )
             }
     }
 
-    suspend fun getCourseById(courseId: String): Course? {
-        val doc = coursesCollection
-            .document(courseId)
-            .get()
-            .await()
+    suspend fun getCourseById(
+        courseId: String
+    ): Course? {
 
-        return doc.toObject(Course::class.java)?.copy(id = doc.id)
+        val id =
+            requireValidCourseId(courseId)
+
+        val document =
+            coursesCollection
+                .document(id)
+                .get()
+                .await()
+
+        if (!document.exists()) {
+            return null
+        }
+
+        return document
+            .toObject(Course::class.java)
+            ?.copy(
+                id = document.id
+            )
     }
 
     suspend fun getEnrolledCourses(): List<EnrolledCourse> {
-        val uid = auth.currentUser?.uid ?: return emptyList()
 
-        val enrollmentDocs = firestore
-            .collection("users")
-            .document(uid)
-            .collection("enrollments")
-            .whereEqualTo("enrolled", true)
-            .get()
-            .await()
+        val uid =
+            auth.currentUser?.uid
+                ?: return emptyList()
 
-        return enrollmentDocs.documents.mapNotNull { doc ->
-            val course = getCourseById(doc.id) ?: return@mapNotNull null
+        val enrollmentSnapshot =
+            firestore
+                .collection("users")
+                .document(uid)
+                .collection("enrollments")
+                .whereEqualTo(
+                    "enrolled",
+                    true
+                )
+                .get()
+                .await()
 
-            val completedLessons =
-                (doc.get("completedLessons") as? List<*>)?.size ?: 0
-
-            val totalLessons =
-                (doc.getLong("totalLessons") ?: 0L).toInt()
-
-            EnrolledCourse(
-                course = course,
-                completedLessons = completedLessons,
-                totalLessons = totalLessons
-            )
-        }
-    }
-
-    suspend fun getLessons(courseId: String): List<Lesson> {
-        return coursesCollection
-            .document(courseId)
-            .collection("lessons")
-            .get()
-            .await()
+        return enrollmentSnapshot
             .documents
-            .mapNotNull { doc ->
-                doc.toObject(Lesson::class.java)?.copy(
-                    id = doc.id.toIntOrNull() ?: 0
+            .mapNotNull { document ->
+
+                val courseId =
+                    document.id
+
+                val course =
+                    getCourseById(
+                        courseId
+                    )
+                        ?: return@mapNotNull null
+
+                val completedLessons =
+                    (
+                            document.get(
+                                "completedLessons"
+                            ) as? List<*>
+                            )?.size ?: 0
+
+                val totalLessons =
+                    (
+                            document.getLong(
+                                "totalLessons"
+                            ) ?: 0L
+                            ).toInt()
+
+                EnrolledCourse(
+                    course =
+                        course,
+                    completedLessons =
+                        completedLessons,
+                    totalLessons =
+                        totalLessons
                 )
             }
     }
 
-    suspend fun getCompletedLessonIds(courseId: String): Set<Int> {
-        val uid = auth.currentUser?.uid ?: return emptySet()
+    suspend fun getLessons(
+        courseId: String
+    ): List<Lesson> {
 
-        val enrollmentDoc = firestore
-            .collection("users")
-            .document(uid)
-            .collection("enrollments")
-            .document(courseId)
+        val id =
+            requireValidCourseId(courseId)
+
+        return coursesCollection
+            .document(id)
+            .collection("lessons")
+            .orderBy(
+                "order",
+                com.google.firebase.firestore.Query.Direction.ASCENDING
+            )
             .get()
             .await()
+            .documents
+            .mapNotNull { document ->
 
-        return (enrollmentDoc.get("completedLessons") as? List<*>)
-            ?.mapNotNull { entry ->
-                (entry as? Number)?.toInt() ?: (entry as? String)?.toIntOrNull()
+                val lesson =
+                    document.toObject(
+                        Lesson::class.java
+                    )
+
+                lesson?.copy(
+                    id =
+                        document.id.toIntOrNull()
+                            ?: 0
+                )
+            }
+    }
+
+    suspend fun getCompletedLessonIds(
+        courseId: String
+    ): Set<Int> {
+
+        val uid =
+            auth.currentUser?.uid
+                ?: return emptySet()
+
+        val id =
+            requireValidCourseId(courseId)
+
+        val enrollmentDocument =
+            firestore
+                .collection("users")
+                .document(uid)
+                .collection("enrollments")
+                .document(id)
+                .get()
+                .await()
+
+        return (
+                enrollmentDocument.get(
+                    "completedLessons"
+                ) as? List<*>
+                )
+            ?.mapNotNull { value ->
+
+                when (value) {
+
+                    is Number ->
+                        value.toInt()
+
+                    is String ->
+                        value.toIntOrNull()
+
+                    else ->
+                        null
+                }
             }
             ?.toSet()
             ?: emptySet()
     }
 
-    suspend fun getLessonsWithProgress(courseId: String): List<LessonProgress> {
-        val lessons = getLessons(courseId).sortedBy { it.id }
-        val completedIds = getCompletedLessonIds(courseId)
+    suspend fun getLessonsWithProgress(
+        courseId: String
+    ): List<LessonProgress> {
+
+        val lessons =
+            getLessons(courseId)
+                .sortedBy { it.id }
+
+        val completedIds =
+            getCompletedLessonIds(
+                courseId
+            )
 
         return lessons.mapIndexed { index, lesson ->
-            val isCompleted = completedIds.contains(lesson.id)
-            val isUnlocked = index == 0 || completedIds.contains(lessons[index - 1].id)
+
+            val isCompleted =
+                completedIds.contains(
+                    lesson.id
+                )
+
+            val isUnlocked =
+                index == 0 ||
+                        completedIds.contains(
+                            lessons[index - 1].id
+                        )
 
             LessonProgress(
-                lesson = lesson,
-                isCompleted = isCompleted,
-                isUnlocked = isUnlocked
+                lesson =
+                    lesson,
+                isCompleted =
+                    isCompleted,
+                isUnlocked =
+                    isUnlocked
             )
         }
     }
@@ -159,33 +313,50 @@ object CourseRepository {
         lessonId: Int,
         lessonDurationMinutes: Int
     ) {
-        val uid = auth.currentUser?.uid ?: return
 
-        val alreadyCompleted = getCompletedLessonIds(courseId).contains(lessonId)
+        val uid =
+            auth.currentUser?.uid
+                ?: return
+
+        val id =
+            requireValidCourseId(courseId)
+
+        val alreadyCompleted =
+            getCompletedLessonIds(
+                id
+            ).contains(
+                lessonId
+            )
 
         firestore
             .collection("users")
             .document(uid)
             .collection("enrollments")
-            .document(courseId)
+            .document(id)
             .set(
                 mapOf(
                     "enrolled" to true,
-                    "completedLessons" to FieldValue.arrayUnion(lessonId)
+                    "completedLessons" to
+                            FieldValue.arrayUnion(
+                                lessonId
+                            )
                 ),
                 SetOptions.merge()
             )
             .await()
 
         if (!alreadyCompleted) {
+
             firestore
                 .collection("users")
                 .document(uid)
                 .set(
                     mapOf(
-                        "totalMinutesWatched" to FieldValue.increment(
-                            lessonDurationMinutes.toLong()
-                        )
+                        "totalMinutesWatched" to
+                                FieldValue.increment(
+                                    lessonDurationMinutes
+                                        .toLong()
+                                )
                     ),
                     SetOptions.merge()
                 )
@@ -194,42 +365,88 @@ object CourseRepository {
     }
 
     suspend fun getTotalMinutesWatched(): Int {
-        val uid = auth.currentUser?.uid ?: return 0
 
-        val doc = firestore
-            .collection("users")
-            .document(uid)
-            .get()
-            .await()
+        val uid =
+            auth.currentUser?.uid
+                ?: return 0
 
-        return (doc.getLong("totalMinutesWatched") ?: 0L).toInt()
+        val document =
+            firestore
+                .collection("users")
+                .document(uid)
+                .get()
+                .await()
+
+        return (
+                document.getLong(
+                    "totalMinutesWatched"
+                ) ?: 0L
+                ).toInt()
     }
 
-    fun extractYoutubeVideoId(urlOrId: String): String {
-        val input = urlOrId.trim()
+    fun extractYoutubeVideoId(
+        urlOrId: String
+    ): String {
 
-        val patterns = listOf(
-            Regex("""(?:youtube\.com/watch\?v=)([a-zA-Z0-9_-]{11})"""),
-            Regex("""(?:www\.youtube\.com/watch\?v=)([a-zA-Z0-9_-]{11})"""),
-            Regex("""(?:youtu\.be/)([a-zA-Z0-9_-]{11})"""),
-            Regex("""(?:www\.youtu\.be/)([a-zA-Z0-9_-]{11})"""),
-            Regex("""(?:youtube\.com/embed/)([a-zA-Z0-9_-]{11})"""),
-            Regex("""(?:www\.youtube\.com/embed/)([a-zA-Z0-9_-]{11})"""),
-            Regex("""^([a-zA-Z0-9_-]{11})$""")
-        )
+        val input =
+            urlOrId.trim()
+
+        if (
+            input.length == 11 &&
+            input.matches(
+                Regex(
+                    "[a-zA-Z0-9_-]{11}"
+                )
+            )
+        ) {
+            return input
+        }
+
+        val patterns =
+            listOf(
+
+                Regex(
+                    """(?:https?://)?(?:www\.)?youtube\.com/watch\?[^#]*[?&]v=([a-zA-Z0-9_-]{11})"""
+                ),
+
+                Regex(
+                    """(?:https?://)?(?:www\.)?youtube\.com/embed/([a-zA-Z0-9_-]{11})"""
+                ),
+
+                Regex(
+                    """(?:https?://)?(?:www\.)?youtube\.com/shorts/([a-zA-Z0-9_-]{11})"""
+                ),
+
+                Regex(
+                    """(?:https?://)?youtu\.be/([a-zA-Z0-9_-]{11})"""
+                ),
+
+                Regex(
+                    """(?:https?://)?(?:www\.)?youtube-nocookie\.com/embed/([a-zA-Z0-9_-]{11})"""
+                )
+            )
 
         for (pattern in patterns) {
-            val match = pattern.find(input)
+
+            val match =
+                pattern.find(input)
 
             if (match != null) {
-                return match.groupValues[1]
+
+                return match
+                    .groupValues[1]
             }
         }
 
-        throw Exception("Invalid YouTube video link")
+        throw Exception(
+            "Invalid YouTube video link"
+        )
     }
 
-    fun getYoutubeThumbnailUrl(videoId: String): String {
+    fun getYoutubeThumbnailUrl(
+        videoId: String
+    ): String {
+
         return "https://img.youtube.com/vi/$videoId/maxresdefault.jpg"
     }
 
@@ -239,51 +456,77 @@ object CourseRepository {
     ): String {
 
         if (lessons.isEmpty()) {
-            throw Exception("At least one lesson is required")
+
+            throw Exception(
+                "At least one lesson is required."
+            )
         }
 
-        val firstVideoId = extractYoutubeVideoId(
-            lessons.first().second
-        )
-
-        val thumbnailUrl = getYoutubeThumbnailUrl(
-            firstVideoId
-        )
-
-        val courseWithThumbnail = course.copy(
-            thumbnailUrl = thumbnailUrl
-        )
-
-        val docRef = coursesCollection.document()
-
-        docRef.set(
-            courseWithThumbnail.copy(
-                id = docRef.id
+        val firstVideoId =
+            extractYoutubeVideoId(
+                lessons.first().second
             )
-        ).await()
+
+        val thumbnailUrl =
+            getYoutubeThumbnailUrl(
+                firstVideoId
+            )
+
+        val courseDocument =
+            coursesCollection.document()
+
+        val courseId =
+            courseDocument.id
+
+        val courseData =
+            course.copy(
+                id = courseId,
+                thumbnailUrl =
+                    thumbnailUrl
+            )
+
+        courseDocument
+            .set(courseData)
+            .await()
 
         lessons.forEachIndexed { index, lesson ->
 
-            val lessonTitle = lesson.first
+            val lessonTitle =
+                lesson.first
 
-            val videoId = extractYoutubeVideoId(
-                lesson.second
-            )
+            val videoId =
+                extractYoutubeVideoId(
+                    lesson.second
+                )
 
-            docRef
-                .collection("lessons")
-                .document("${index + 1}")
+            val lessonDocument =
+                courseDocument
+                    .collection("lessons")
+                    .document(
+                        (index + 1).toString()
+                    )
+
+            lessonDocument
                 .set(
                     mapOf(
-                        "title" to lessonTitle,
-                        "youtubeVideoId" to videoId,
-                        "durationMinutes" to course.durationMinutes
+                        "title" to
+                                lessonTitle,
+                        "description" to
+                                "",
+                        "youtubeVideoId" to
+                                videoId,
+                        "durationMinutes" to
+                                course.durationMinutes,
+                        "order" to
+                                (index + 1),
+                        "createdAt" to
+                                System.currentTimeMillis()
                     )
                 )
                 .await()
         }
 
-        return docRef.id
+        return courseId
     }
 
     suspend fun addCourse(
@@ -291,38 +534,63 @@ object CourseRepository {
         youtubeVideoId: String
     ): String {
 
-        val videoId = extractYoutubeVideoId(
-            youtubeVideoId
-        )
+        val videoId =
+            extractYoutubeVideoId(
+                youtubeVideoId
+            )
 
-        val thumbnailUrl = getYoutubeThumbnailUrl(
-            videoId
-        )
+        val thumbnailUrl =
+            getYoutubeThumbnailUrl(
+                videoId
+            )
 
-        val courseWithThumbnail = course.copy(
-            thumbnailUrl = thumbnailUrl
-        )
+        val courseWithThumbnail =
+            course.copy(
+                thumbnailUrl =
+                    thumbnailUrl
+            )
 
         return addCourseWithLessons(
-            courseWithThumbnail,
-            listOf("Lesson 1" to videoId)
+            course =
+                courseWithThumbnail,
+            lessons =
+                listOf(
+                    "Lesson 1" to videoId
+                )
         )
     }
 
-    suspend fun deleteCourse(courseId: String) {
+    suspend fun deleteCourse(
+        courseId: String
+    ) {
 
-        val lessonDocs = coursesCollection
-            .document(courseId)
-            .collection("lessons")
-            .get()
-            .await()
+        val id =
+            requireValidCourseId(
+                courseId
+            )
 
-        for (lessonDoc in lessonDocs.documents) {
-            lessonDoc.reference.delete().await()
+        val courseDocument =
+            coursesCollection
+                .document(id)
+
+        val lessonSnapshot =
+            courseDocument
+                .collection("lessons")
+                .get()
+                .await()
+
+        for (
+        lessonDocument
+        in lessonSnapshot.documents
+        ) {
+
+            lessonDocument
+                .reference
+                .delete()
+                .await()
         }
 
-        coursesCollection
-            .document(courseId)
+        courseDocument
             .delete()
             .await()
     }

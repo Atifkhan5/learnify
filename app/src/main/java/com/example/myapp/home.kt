@@ -1,3 +1,4 @@
+
 package com.example.myapp
 
 import androidx.compose.foundation.background
@@ -8,8 +9,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -31,19 +32,29 @@ private val LearnifyGray = Color(0xFF64748B)
 private val LearnifyBackground = Color(0xFFF6F8FC)
 
 @Composable
-fun HomeScreen() {
+fun Home(
+    onLogout: () -> Unit
+) {
 
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember {
+        mutableIntStateOf(0)
+    }
 
-    // Drives Home -> Course Details -> Lesson Player navigation.
-    // selectedCourse == null: showing the bottom-tab content.
-    // selectedCourse != null, selectedLesson == null: showing course details.
-    // both non-null: showing the lesson player.
-    var selectedCourse by remember { mutableStateOf<Course?>(null) }
-    var selectedLesson by remember { mutableStateOf<Lesson?>(null) }
-    var selectedLessonTotalCount by remember { mutableIntStateOf(0) }
+    var selectedCourse by remember {
+        mutableStateOf<Course?>(null)
+    }
 
-    val isAdmin = remember { CourseRepository.isCurrentUserAdmin() }
+    var selectedLesson by remember {
+        mutableStateOf<Lesson?>(null)
+    }
+
+    var selectedLessonTotalCount by remember {
+        mutableIntStateOf(0)
+    }
+
+    val isAdmin = remember {
+        CourseRepository.isCurrentUserAdmin()
+    }
 
     when {
 
@@ -70,6 +81,7 @@ fun HomeScreen() {
                     selectedCourse = null
                 },
                 onLessonClick = { lesson, totalCount ->
+
                     selectedLesson = lesson
                     selectedLessonTotalCount = totalCount
                 }
@@ -91,68 +103,140 @@ fun HomeScreen() {
 
                         NavigationBarItem(
                             selected = selectedTab == 0,
-                            onClick = { selectedTab = 0 },
+                            onClick = {
+                                selectedTab = 0
+                            },
                             icon = {
+
                                 Icon(
                                     imageVector = Icons.Default.Home,
                                     contentDescription = "Home",
-                                    tint = if (selectedTab == 0) LearnifyBlue else LearnifyGray
+                                    tint =
+                                        if (selectedTab == 0) {
+                                            LearnifyBlue
+                                        } else {
+                                            LearnifyGray
+                                        }
                                 )
                             },
-                            label = { Text(text = "Home", fontSize = 11.sp) }
+                            label = {
+
+                                Text(
+                                    text = "Home",
+                                    fontSize = 11.sp
+                                )
+                            }
                         )
 
                         NavigationBarItem(
                             selected = selectedTab == 1,
-                            onClick = { selectedTab = 1 },
+                            onClick = {
+                                selectedTab = 1
+                            },
                             icon = {
+
                                 Icon(
                                     imageVector = Icons.Default.PlayCircle,
                                     contentDescription = "My Courses",
-                                    tint = if (selectedTab == 1) LearnifyBlue else LearnifyGray
+                                    tint =
+                                        if (selectedTab == 1) {
+                                            LearnifyBlue
+                                        } else {
+                                            LearnifyGray
+                                        }
                                 )
                             },
-                            label = { Text(text = "My Courses", fontSize = 11.sp) }
+                            label = {
+
+                                Text(
+                                    text = "My Courses",
+                                    fontSize = 11.sp
+                                )
+                            }
                         )
 
                         NavigationBarItem(
                             selected = selectedTab == 2,
-                            onClick = { selectedTab = 2 },
+                            onClick = {
+                                selectedTab = 2
+                            },
                             icon = {
+
                                 Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = "Search",
-                                    tint = if (selectedTab == 2) LearnifyBlue else LearnifyGray
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Profile",
+                                    tint =
+                                        if (selectedTab == 2) {
+                                            LearnifyBlue
+                                        } else {
+                                            LearnifyGray
+                                        }
                                 )
                             },
-                            label = { Text(text = "Search", fontSize = 11.sp) }
+                            label = {
+
+                                Text(
+                                    text = "Profile",
+                                    fontSize = 11.sp
+                                )
+                            }
                         )
 
                         NavigationBarItem(
                             selected = selectedTab == 3,
-                            onClick = { selectedTab = 3 },
+                            onClick = {
+                                selectedTab = 3
+                            },
                             icon = {
+
                                 Icon(
                                     imageVector = Icons.Default.Dashboard,
                                     contentDescription = "Dashboard",
-                                    tint = if (selectedTab == 3) LearnifyBlue else LearnifyGray
+                                    tint =
+                                        if (selectedTab == 3) {
+                                            LearnifyBlue
+                                        } else {
+                                            LearnifyGray
+                                        }
                                 )
                             },
-                            label = { Text(text = "Dashboard", fontSize = 11.sp) }
+                            label = {
+
+                                Text(
+                                    text = "Dashboard",
+                                    fontSize = 11.sp
+                                )
+                            }
                         )
 
                         if (isAdmin) {
+
                             NavigationBarItem(
                                 selected = selectedTab == 4,
-                                onClick = { selectedTab = 4 },
+                                onClick = {
+                                    selectedTab = 4
+                                },
                                 icon = {
+
                                     Icon(
-                                        imageVector = Icons.Default.AdminPanelSettings,
+                                        imageVector =
+                                            Icons.Default.AdminPanelSettings,
                                         contentDescription = "Admin",
-                                        tint = if (selectedTab == 4) LearnifyBlue else LearnifyGray
+                                        tint =
+                                            if (selectedTab == 4) {
+                                                LearnifyBlue
+                                            } else {
+                                                LearnifyGray
+                                            }
                                     )
                                 },
-                                label = { Text(text = "Admin", fontSize = 11.sp) }
+                                label = {
+
+                                    Text(
+                                        text = "Admin",
+                                        fontSize = 11.sp
+                                    )
+                                }
                             )
                         }
                     }
@@ -169,31 +253,49 @@ fun HomeScreen() {
                     when (selectedTab) {
 
                         0 -> {
+
                             HomeTab(
                                 onCourseClick = { course ->
+
                                     selectedCourse = course
                                 }
                             )
                         }
 
                         1 -> {
+
                             MyCoursesScreen(
                                 onCourseClick = { course ->
+
                                     selectedCourse = course
                                 }
                             )
                         }
 
                         2 -> {
-                            SearchScreen()
+
+                            ProfileScreen(
+                                onLogout = {
+
+                                    onLogout()
+                                }
+                            )
                         }
 
                         3 -> {
-                            DashboardScreen()
+
+                            DashboardScreen(
+                                onCourseClick = { course ->
+
+                                    selectedCourse = course
+                                }
+                            )
                         }
 
                         4 -> {
+
                             if (isAdmin) {
+
                                 AdminScreen()
                             }
                         }
@@ -201,19 +303,5 @@ fun HomeScreen() {
                 }
             }
         }
-    }
-}
-
-@Composable
-fun SearchScreen() {
-    Box(modifier = Modifier.fillMaxSize()) {
-        Text(text = "Search")
-    }
-}
-
-@Composable
-fun DashboardScreen() {
-    Box(modifier = Modifier.fillMaxSize()) {
-        Text(text = "Dashboard")
     }
 }

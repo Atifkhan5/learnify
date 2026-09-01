@@ -112,7 +112,17 @@ class MainActivity : ComponentActivity() {
                 }
 
                 composable("home") {
-                    HomeScreen()
+                    Home(
+                        onLogout = {
+                            FirebaseAuth.getInstance().signOut()
+
+                            navController.navigate("login") {
+                                popUpTo("home") {
+                                    inclusive = true
+                                }
+                            }
+                        }
+                    )
                 }
             }
         }
