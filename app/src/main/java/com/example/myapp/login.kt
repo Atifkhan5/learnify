@@ -2,6 +2,7 @@ package com.example.myapp
 
 import android.app.Activity
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -49,6 +50,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
@@ -60,6 +62,8 @@ private val LearnifyDark = Color(0xFF172554)
 private val LearnifyLightBlue = Color(0xFFEFF6FF)
 private val LearnifyText = Color(0xFF1E293B)
 private val LearnifyGray = Color(0xFF64748B)
+
+private const val TAG = "LearnifyAuth"
 
 class login : ComponentActivity() {
 
@@ -87,6 +91,13 @@ class login : ComponentActivity() {
                                 "Login successful!",
                                 Toast.LENGTH_SHORT
                             ).show()
+
+                            // TODO: replace "home" with your actual post-login destination
+                            // and add a matching composable("home") { ... } block above.
+                            // Without this, the screen just stays on "login" after success.
+                            navController.navigate("home") {
+                                popUpTo("login") { inclusive = true }
+                            }
                         }
                     )
                 }
@@ -101,6 +112,16 @@ class login : ComponentActivity() {
                             navController.navigate("login")
                         }
                     )
+                }
+
+                // Placeholder so the app doesn't crash before you add your real home screen.
+                composable("home") {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Home screen goes here")
+                    }
                 }
             }
         }
@@ -192,86 +213,77 @@ fun LoginScreen(
             contract = ActivityResultContracts.StartActivityForResult()
         ) { result ->
 
-            if (result.resultCode == Activity.RESULT_OK) {
+            // Log the raw resultCode no matter what — this alone tells you a lot.
+            Log.d(TAG, "Google sign-in activity resultCode=${result.resultCode} (RESULT_OK=${Activity.RESULT_OK})")
 
-                val task =
-                    GoogleSignIn.getSignedInAccountFromIntent(
-                        result.data
-                    )
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
 
-                try {
+            try {
 
-                    val account = task.result
-                    val idToken = account.idToken
+                // .getResult(ApiException::class.java) throws with a real status code
+                // instead of silently giving you a "cancelled" toast.
+                val account = task.getResult(ApiException::class.java)
+                val idToken = account.idToken
 
-                    if (idToken == null) {
+                if (idToken == null) {
 
-                        isGoogleLoading = false
+                    isGoogleLoading = false
 
-                        Toast.makeText(
-                            context,
-                            "Google authentication failed",
-                            Toast.LENGTH_LONG
-                        ).show()
+                    Toast.makeText(
+                        context,
+                        "Google authentication failed: no ID token returned",
+                        Toast.LENGTH_LONG
+                    ).show()
 
-                    } else {
+                } else {
 
-                        val credential =
-                            GoogleAuthProvider.getCredential(
-                                idToken,
-                                null
-                            )
+                    val credential =
+                        GoogleAuthProvider.getCredential(
+                            idToken,
+                            null
+                        )
 
-                        auth.signInWithCredential(
-                            credential
-                        ).addOnCompleteListener { firebaseTask ->
+                    auth.signInWithCredential(
+                        credential
+                    ).addOnCompleteListener { firebaseTask ->
 
-                            if (firebaseTask.isSuccessful) {
+                        if (firebaseTask.isSuccessful) {
 
-                                val user = auth.currentUser
+                            val user = auth.currentUser
 
-                                if (user != null) {
+                            if (user != null) {
 
-                                    verifyUserInFirestore(
-                                        uid = user.uid,
-                                        name = user.displayName ?: account.displayName,
-                                        userEmail = user.email ?: account.email,
-                                        photoUrl = user.photoUrl?.toString(),
-                                        authProvider = "google",
-                                        onDone = {
+                                verifyUserInFirestore(
+                                    uid = user.uid,
+                                    name = user.displayName ?: account.displayName,
+                                    userEmail = user.email ?: account.email,
+                                    photoUrl = user.photoUrl?.toString(),
+                                    authProvider = "google",
+                                    onDone = {
 
-                                            isGoogleLoading = false
+                                        isGoogleLoading = false
 
-                                            Toast.makeText(
-                                                context,
-                                                "Google sign-in successful!",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                        Toast.makeText(
+                                            context,
+                                            "Google sign-in successful!",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
 
-                                            onLoginSuccess()
-                                        },
-                                        onError = { exception ->
+                                        onLoginSuccess()
+                                    },
+                                    onError = { exception ->
 
-                                            isGoogleLoading = false
+                                        isGoogleLoading = false
 
-                                            Toast.makeText(
-                                                context,
-                                                "Failed to sync profile: ${exception.message}",
-                                                Toast.LENGTH_LONG
-                                            ).show()
-                                        }
-                                    )
+                                        Log.e(TAG, "Firestore sync failed", exception)
 
-                                } else {
-
-                                    isGoogleLoading = false
-
-                                    Toast.makeText(
-                                        context,
-                                        "User information unavailable",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                }
+                                        Toast.makeText(
+                                            context,
+                                            "Failed to sync profile: ${exception.message}",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                )
 
                             } else {
 
@@ -279,33 +291,59 @@ fun LoginScreen(
 
                                 Toast.makeText(
                                     context,
-                                    firebaseTask.exception?.message
-                                        ?: "Google sign-in failed",
+                                    "User information unavailable",
                                     Toast.LENGTH_LONG
                                 ).show()
                             }
+
+                        } else {
+
+                            isGoogleLoading = false
+
+                            Log.e(TAG, "Firebase signInWithCredential failed", firebaseTask.exception)
+
+                            Toast.makeText(
+                                context,
+                                firebaseTask.exception?.message
+                                    ?: "Google sign-in failed",
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                     }
-
-                } catch (exception: Exception) {
-
-                    isGoogleLoading = false
-
-                    Toast.makeText(
-                        context,
-                        "Google sign-in failed: ${exception.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
                 }
 
-            } else {
+            } catch (e: ApiException) {
 
                 isGoogleLoading = false
 
+                // statusCode 12501 = user actually cancelled the picker.
+                // statusCode 10 (DEVELOPER_ERROR) = SHA-1 fingerprint / OAuth client
+                // misconfiguration in Firebase console — by far the most common cause
+                // of a Google sign-in that fails immediately without a real cancel.
+                Log.e(TAG, "Google sign-in ApiException statusCode=${e.statusCode}", e)
+
+                val message = when (e.statusCode) {
+                    12501 -> "Google sign-in cancelled"
+                    7 -> "Network error — check your connection"
+                    10 -> "Google sign-in misconfigured (DEVELOPER_ERROR). " +
+                            "Check that your SHA-1/SHA-256 fingerprints are added in the " +
+                            "Firebase console and that default_web_client_id is the Web " +
+                            "client ID, then re-download google-services.json."
+                    else -> "Google sign-in failed (code ${e.statusCode}): ${e.message}"
+                }
+
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+
+            } catch (e: Exception) {
+
+                isGoogleLoading = false
+
+                Log.e(TAG, "Google sign-in unexpected error", e)
+
                 Toast.makeText(
                     context,
-                    "Google sign-in cancelled",
-                    Toast.LENGTH_SHORT
+                    "Google sign-in failed: ${e.message}",
+                    Toast.LENGTH_LONG
                 ).show()
             }
         }
@@ -550,7 +588,6 @@ fun LoginScreen(
 
                                         if (user != null) {
 
-                                            // Firestore verification on email/password login too
                                             verifyUserInFirestore(
                                                 uid = user.uid,
                                                 name = user.displayName,
@@ -563,6 +600,7 @@ fun LoginScreen(
                                                 },
                                                 onError = { exception ->
                                                     isLoading = false
+                                                    Log.e(TAG, "Firestore sync failed", exception)
                                                     Toast.makeText(
                                                         context,
                                                         "Failed to sync profile: ${exception.message}",
@@ -585,6 +623,8 @@ fun LoginScreen(
                                     } else {
 
                                         isLoading = false
+
+                                        Log.e(TAG, "Email/password sign-in failed", task.exception)
 
                                         Toast.makeText(
                                             context,
@@ -629,7 +669,6 @@ fun LoginScreen(
                     modifier = Modifier.height(18.dp)
                 )
 
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -663,7 +702,6 @@ fun LoginScreen(
                 Spacer(
                     modifier = Modifier.height(18.dp)
                 )
-
 
                 Button(
                     onClick = {

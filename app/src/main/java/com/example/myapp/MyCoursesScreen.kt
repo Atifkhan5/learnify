@@ -16,8 +16,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,11 +38,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import android.util.Log
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 private val LearnifyBlue = Color(0xFF2563EB)
+private val LearnifyGreen = Color(0xFF16A34A)
 private val LearnifyDark = Color(0xFF172554)
 private val LearnifyText = Color(0xFF1E293B)
 private val LearnifyGray = Color(0xFF64748B)
@@ -52,6 +57,20 @@ data class EnrolledCourse(
 ) {
     val progress: Float
         get() = if (totalLessons == 0) 0f else completedLessons.toFloat() / totalLessons
+
+    val isCompleted: Boolean
+        get() = totalLessons > 0 && completedLessons >= totalLessons
+}
+
+private fun formatWatchTime(totalMinutes: Int): String {
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+
+    return if (hours > 0) {
+        "${hours}h ${minutes}m"
+    } else {
+        "${minutes}m"
+    }
 }
 
 @Composable
@@ -61,25 +80,34 @@ fun MyCoursesScreen(
 ) {
 
     var enrolledCourses by remember { mutableStateOf<List<EnrolledCourse>>(emptyList()) }
+    var totalMinutesWatched by remember { mutableStateOf(0) }
     var isLoading by remember { mutableStateOf(true) }
     var loadError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         try {
-            enrolledCourses = CourseRepository.getEnrolledCourses()
-            // DEBUG: confirm what the repository actually returned
-            Log.d("COURSES_DEBUG", "Loaded ${enrolledCourses.size} courses")
-            enrolledCourses.forEach {
-                Log.d("COURSES_DEBUG", "Course: ${it.course.title}, thumbnailUrl: '${it.course.thumbnailUrl}'")
+            coroutineScope {
+                val enrolledDeferred = async { CourseRepository.getEnrolledCourses() }
+                val minutesDeferred = async { CourseRepository.getTotalMinutesWatched() }
+
+                enrolledCourses = enrolledDeferred.await()
+                totalMinutesWatched = minutesDeferred.await()
             }
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
             loadError = exception.message ?: "Failed to load your courses"
-            Log.e("COURSES_DEBUG", "Failed to load courses", exception)
         } finally {
             isLoading = false
         }
+    }
+
+    val inProgressCourses = remember(enrolledCourses) {
+        enrolledCourses.filter { !it.isCompleted }
+    }
+
+    val completedCourses = remember(enrolledCourses) {
+        enrolledCourses.filter { it.isCompleted }
     }
 
     Box(
@@ -110,7 +138,12 @@ fun MyCoursesScreen(
                 color = LearnifyGray
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
+
+            if (!isLoading && loadError == null) {
+                WatchTimeStatCard(totalMinutesWatched = totalMinutesWatched)
+                Spacer(modifier = Modifier.height(24.dp))
+            }
 
             when {
 
@@ -138,18 +171,92 @@ fun MyCoursesScreen(
                 }
 
                 else -> {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        enrolledCourses.forEach { enrolled ->
-                            EnrolledCourseCard(
-                                enrolled = enrolled,
-                                onClick = { onCourseClick(enrolled.course) }
-                            )
+                    Text(
+                        text = "In Progress",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = LearnifyText
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (inProgressCourses.isEmpty()) {
+                        Text(
+                            text = "Nothing in progress right now",
+                            fontSize = 13.sp,
+                            color = LearnifyGray
+                        )
+                    } else {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            inProgressCourses.forEach { enrolled ->
+                                EnrolledCourseCard(
+                                    enrolled = enrolled,
+                                    onClick = { onCourseClick(enrolled.course) }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(28.dp))
+
+                    Text(
+                        text = "Completed Courses",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = LearnifyText
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (completedCourses.isEmpty()) {
+                        Text(
+                            text = "Finish all lessons in a course to see it here",
+                            fontSize = 13.sp,
+                            color = LearnifyGray
+                        )
+                    } else {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            completedCourses.forEach { enrolled ->
+                                EnrolledCourseCard(
+                                    enrolled = enrolled,
+                                    onClick = { onCourseClick(enrolled.course) }
+                                )
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun WatchTimeStatCard(totalMinutesWatched: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(LearnifyBlue.copy(alpha = 0.08f))
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(
+                text = "Total watch time",
+                fontSize = 12.sp,
+                color = LearnifyGray
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = formatWatchTime(totalMinutesWatched),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = LearnifyBlue
+            )
         }
     }
 }
@@ -184,11 +291,6 @@ private fun EnrolledCourseCard(
 ) {
     val course = enrolled.course
 
-    // DEBUG: log the URL each card actually receives
-    LaunchedEffect(course.thumbnailUrl) {
-        Log.d("THUMBNAIL_DEBUG", "Course: ${course.title}, URL: '${course.thumbnailUrl}'")
-    }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -203,8 +305,8 @@ private fun EnrolledCourseCard(
             AsyncImage(
                 model = course.thumbnailUrl,
                 contentDescription = course.title,
-                placeholder = ColorPainter(Color.LightGray), // shown while loading
-                error = ColorPainter(Color.Red),             // shown if load fails — diagnostic
+                placeholder = ColorPainter(Color.LightGray),
+                error = ColorPainter(Color.Red),
                 modifier = Modifier
                     .size(64.dp)
                     .clip(RoundedCornerShape(12.dp)),
@@ -231,6 +333,14 @@ private fun EnrolledCourseCard(
                     maxLines = 1
                 )
             }
+
+            if (enrolled.isCompleted) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = "Completed",
+                    tint = LearnifyGreen
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -241,8 +351,8 @@ private fun EnrolledCourseCard(
                 .fillMaxWidth()
                 .height(6.dp)
                 .clip(RoundedCornerShape(3.dp)),
-            color = LearnifyBlue,
-            trackColor = LearnifyBlue.copy(alpha = 0.15f)
+            color = if (enrolled.isCompleted) LearnifyGreen else LearnifyBlue,
+            trackColor = (if (enrolled.isCompleted) LearnifyGreen else LearnifyBlue).copy(alpha = 0.15f)
         )
 
         Spacer(modifier = Modifier.height(6.dp))
@@ -260,7 +370,7 @@ private fun EnrolledCourseCard(
                 text = "${(enrolled.progress * 100).toInt()}%",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = LearnifyBlue
+                color = if (enrolled.isCompleted) LearnifyGreen else LearnifyBlue
             )
         }
 
@@ -270,7 +380,7 @@ private fun EnrolledCourseCard(
             onClick = onClick,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (enrolled.progress >= 1f) "Review Course" else "Continue Learning")
+            Text(if (enrolled.isCompleted) "Review Course" else "Continue Learning")
         }
     }
 }

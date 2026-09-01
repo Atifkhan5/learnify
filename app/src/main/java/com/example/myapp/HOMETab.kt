@@ -41,7 +41,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import android.util.Log
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -49,6 +48,7 @@ import kotlinx.coroutines.coroutineScope
 
 private val LearnifyBlue = Color(0xFF2563EB)
 private val LearnifyPurple = Color(0xFF7C3AED)
+private val LearnifyGreen = Color(0xFF16A34A)
 private val LearnifyDark = Color(0xFF172554)
 private val LearnifyText = Color(0xFF1E293B)
 private val LearnifyGray = Color(0xFF64748B)
@@ -60,6 +60,17 @@ private val defaultCategories = listOf(
     "Marketing",
     "Data Science"
 )
+
+private fun formatWatchTime(totalMinutes: Int): String {
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+
+    return if (hours > 0) {
+        "${hours}h ${minutes}m"
+    } else {
+        "${minutes}m"
+    }
+}
 
 @Composable
 fun HomeTab(
@@ -73,6 +84,8 @@ fun HomeTab(
     var allCourses by remember { mutableStateOf<List<Course>>(emptyList()) }
     var featuredCourses by remember { mutableStateOf<List<Course>>(emptyList()) }
     var popularCourses by remember { mutableStateOf<List<Course>>(emptyList()) }
+    var completedCourses by remember { mutableStateOf<List<EnrolledCourse>>(emptyList()) }
+    var totalMinutesWatched by remember { mutableStateOf(0) }
 
     var isLoading by remember { mutableStateOf(true) }
     var loadError by remember { mutableStateOf<String?>(null) }
@@ -84,22 +97,19 @@ fun HomeTab(
                 val allDeferred = async { CourseRepository.getAllCourses() }
                 val featuredDeferred = async { CourseRepository.getFeaturedCourses() }
                 val popularDeferred = async { CourseRepository.getPopularCourses() }
+                val enrolledDeferred = async { CourseRepository.getEnrolledCourses() }
+                val minutesDeferred = async { CourseRepository.getTotalMinutesWatched() }
 
                 allCourses = allDeferred.await()
                 featuredCourses = featuredDeferred.await()
                 popularCourses = popularDeferred.await()
-            }
-
-            // DEBUG: confirm what the repository actually returned
-            Log.d("HOME_DEBUG", "allCourses=${allCourses.size} featured=${featuredCourses.size} popular=${popularCourses.size}")
-            allCourses.forEach {
-                Log.d("HOME_DEBUG", "Course: ${it.title}, thumbnailUrl: '${it.thumbnailUrl}'")
+                completedCourses = enrolledDeferred.await().filter { it.isCompleted }
+                totalMinutesWatched = minutesDeferred.await()
             }
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
             loadError = exception.message ?: "Failed to load courses"
-            Log.e("HOME_DEBUG", "Failed to load courses", exception)
         } finally {
             isLoading = false
         }
@@ -178,7 +188,12 @@ fun HomeTab(
                 shape = RoundedCornerShape(15.dp)
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
+
+            if (!isLoading && loadError == null && searchQuery.isBlank()) {
+                WatchTimeStatCard(totalMinutesWatched = totalMinutesWatched)
+                Spacer(modifier = Modifier.height(20.dp))
+            }
 
             if (isLoading) {
 
@@ -297,10 +312,27 @@ fun HomeTab(
                     }
                 }
 
+                if (completedCourses.isNotEmpty()) {
+
+                    Spacer(modifier = Modifier.height(28.dp))
+
+                    SectionHeader(title = "Completed Courses")
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        items(completedCourses, key = { it.course.id }) { enrolled ->
+                            CourseCard(
+                                course = enrolled.course,
+                                onClick = { onCourseClick(enrolled.course) },
+                                completed = true
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(28.dp))
 
-                // Shows every course regardless of featured/popular flags,
-                // so newly added courses are always visible somewhere.
                 SectionHeader(title = "All Courses")
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -327,6 +359,33 @@ fun HomeTab(
 
                 Spacer(modifier = Modifier.height(20.dp))
             }
+        }
+    }
+}
+
+@Composable
+private fun WatchTimeStatCard(totalMinutesWatched: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(LearnifyBlue.copy(alpha = 0.08f))
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(
+                text = "Total watch time",
+                fontSize = 12.sp,
+                color = LearnifyGray
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = formatWatchTime(totalMinutesWatched),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = LearnifyBlue
+            )
         }
     }
 }
@@ -365,7 +424,8 @@ private fun CategoryChip(
 @Composable
 private fun CourseCard(
     course: Course,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    completed: Boolean = false
 ) {
     Column(
         modifier = Modifier
@@ -375,17 +435,36 @@ private fun CourseCard(
             .clickable { onClick() }
     ) {
 
-        AsyncImage(
-            model = course.thumbnailUrl,
-            contentDescription = course.title,
-            placeholder = ColorPainter(Color.LightGray), // shown while loading
-            error = ColorPainter(Color.Red),             // shown if load fails — diagnostic
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(100.dp)
-                .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)),
-            contentScale = ContentScale.Crop
-        )
+        Box {
+            AsyncImage(
+                model = course.thumbnailUrl,
+                contentDescription = course.title,
+                placeholder = ColorPainter(Color.LightGray),
+                error = ColorPainter(Color.Red),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)),
+                contentScale = ContentScale.Crop
+            )
+
+            if (completed) {
+                Box(
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(LearnifyGreen)
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = "Completed",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            }
+        }
 
         Column(modifier = Modifier.padding(12.dp)) {
 
@@ -435,8 +514,8 @@ private fun CourseListItem(
         AsyncImage(
             model = course.thumbnailUrl,
             contentDescription = course.title,
-            placeholder = ColorPainter(Color.LightGray), // shown while loading
-            error = ColorPainter(Color.Red),             // shown if load fails — diagnostic
+            placeholder = ColorPainter(Color.LightGray),
+            error = ColorPainter(Color.Red),
             modifier = Modifier
                 .size(64.dp)
                 .clip(RoundedCornerShape(12.dp)),

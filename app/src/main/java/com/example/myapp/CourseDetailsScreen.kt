@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -60,7 +61,7 @@ fun CourseDetailsScreen(
 ) {
     val scope = rememberCoroutineScope()
 
-    var lessons by remember { mutableStateOf<List<Lesson>>(emptyList()) }
+    var lessonProgressList by remember { mutableStateOf<List<LessonProgress>>(emptyList()) }
     var isLoadingLessons by remember { mutableStateOf(true) }
     var lessonsError by remember { mutableStateOf<String?>(null) }
 
@@ -71,7 +72,7 @@ fun CourseDetailsScreen(
 
     LaunchedEffect(course.id) {
         try {
-            lessons = CourseRepository.getLessons(course.id)
+            lessonProgressList = CourseRepository.getLessonsWithProgress(course.id)
         } catch (exception: Exception) {
             lessonsError = exception.message ?: "Failed to load lessons"
         } finally {
@@ -82,7 +83,6 @@ fun CourseDetailsScreen(
             val progress = CourseProgressRepository.getCourseProgress(course.id)
             isEnrolled = progress.enrolled
         } catch (exception: Exception) {
-            // If this fails, default to "not enrolled" and let the enroll button retry.
         } finally {
             isCheckingEnrollment = false
         }
@@ -178,7 +178,7 @@ fun CourseDetailsScreen(
                             try {
                                 CourseProgressRepository.enrollCourse(
                                     courseId = course.id,
-                                    totalLessons = lessons.size
+                                    totalLessons = lessonProgressList.size
                                 )
                                 isEnrolled = true
                             } catch (exception: Exception) {
@@ -246,7 +246,7 @@ fun CourseDetailsScreen(
                     )
                 }
 
-                lessons.isEmpty() -> {
+                lessonProgressList.isEmpty() -> {
                     Text(
                         text = "No lessons added yet",
                         fontSize = 13.sp,
@@ -258,16 +258,19 @@ fun CourseDetailsScreen(
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        lessons.forEachIndexed { index, lesson ->
+                        lessonProgressList.forEachIndexed { index, progress ->
+                            val locked = !isEnrolled || !progress.isUnlocked
+
                             LessonRow(
                                 index = index + 1,
-                                lesson = lesson,
+                                lesson = progress.lesson,
+                                completed = progress.isCompleted,
+                                locked = locked,
                                 onClick = {
-                                    if (isEnrolled) {
-                                        onLessonClick(lesson, lessons.size)
+                                    if (!locked) {
+                                        onLessonClick(progress.lesson, lessonProgressList.size)
                                     }
-                                },
-                                locked = !isEnrolled
+                                }
                             )
                         }
                     }
@@ -281,8 +284,9 @@ fun CourseDetailsScreen(
 private fun LessonRow(
     index: Int,
     lesson: Lesson,
-    onClick: () -> Unit,
-    locked: Boolean
+    completed: Boolean,
+    locked: Boolean,
+    onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -324,16 +328,28 @@ private fun LessonRow(
             )
         }
 
-        if (!locked) {
-            Icon(
-                imageVector = Icons.Filled.PlayCircle,
-                contentDescription = "Play",
-                tint = LearnifyBlue
-            )
+        when {
+            completed -> {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = "Completed",
+                    tint = LearnifyGreen
+                )
+            }
+            locked -> {
+                Icon(
+                    imageVector = Icons.Filled.Lock,
+                    contentDescription = "Locked",
+                    tint = LearnifyGray
+                )
+            }
+            else -> {
+                Icon(
+                    imageVector = Icons.Filled.PlayCircle,
+                    contentDescription = "Play",
+                    tint = LearnifyBlue
+                )
+            }
         }
-    }
-
-    if (locked) {
-        Spacer(modifier = Modifier.height(0.dp))
     }
 }
